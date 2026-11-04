@@ -21,9 +21,14 @@ For now it signs EVM messages (EIP-191), with keys from a BIP-39 recovery phrase
 - [Sign](#sign)
 - [Check before you send it](#check-before-you-send-it)
 - [Keys and options](#keys-and-options)
+  - [Recovery phrase](#recovery-phrase)
+  - [Keystore files](#keystore-files)
+  - [Prompt or file](#prompt-or-file)
+  - [Other options](#other-options)
 - [What it refuses or skips](#what-it-refuses-or-skips)
 - [Not supported](#not-supported)
 - [Exit codes](#exit-codes)
+- [Standards](#standards)
 - [Check a release against the source](#check-a-release-against-the-source)
 - [License](#license)
 
@@ -110,18 +115,36 @@ Type `node dist/por-sign.mjs` where the examples say `por-sign`. On an offline m
 ## Sign
 
 ```bash
-# Keys from a recovery phrase, typed at a hidden prompt
-por-sign sign messages.csv --domain por.example.com --mnemonic
-
-# Keys from keystore files: Foundry's folder, geth's, or single files
-por-sign sign messages.csv --domain por.example.com --keystore ~/.foundry/keystores
+por-sign sign <file> --domain <domain> <keys>
 ```
 
-In PowerShell, the commands are the same, with Windows paths such as `$HOME\.foundry\keystores`.
+- `<file>` is the CSV file from Export messages.
+- `--domain` is the platform's domain, as your Client Admin confirmed it. **Type it yourself; never copy it from the file.** A forged file names a lookalike domain, such as `por-example.com`, and por-sign refuses every row whose message names a domain other than yours.
+- `<keys>` says where the keys come from: a recovery phrase, keystore files, or both. Each secret is typed at a hidden prompt, which shows nothing as you type, or read from a file:
 
-**Type `--domain` yourself; never copy it from the file.** A forged file names a lookalike domain, such as `por-example.com`, and por-sign refuses every row whose message names a domain other than yours.
+| Keys | Typed at a hidden prompt | Read from a file |
+| --- | --- | --- |
+| Recovery phrase (BIP-39) | `--mnemonic` | `--mnemonic-file <path>` |
+| Its BIP-39 passphrase, if it has one | `--passphrase` | Not possible |
+| Keystore files, named with `--keystore <path>` | Their password, by default | `--password-file <path>` |
 
-por-sign checks each row, shows what it will sign, and asks first:
+```bash
+# Recovery phrase, typed at the prompt
+por-sign sign messages.csv --domain por.example.com --mnemonic
+
+# Recovery phrase and its BIP-39 passphrase, both typed at the prompt
+por-sign sign messages.csv --domain por.example.com --mnemonic --passphrase
+
+# Keystore files in Foundry's folder, their password typed at the prompt
+por-sign sign messages.csv --domain por.example.com --keystore ~/.foundry/keystores
+
+# Both, with the secrets read from files
+por-sign sign messages.csv --domain por.example.com --mnemonic-file words.txt --keystore keys/ --password-file password.txt
+```
+
+In PowerShell, the commands are the same, with Windows paths such as `$HOME\.foundry\keystores`. The details of each kind of key are in [Keys and options](#keys-and-options).
+
+por-sign checks every row first, and asks for the secrets only if some row is to sign. Then it shows what it will sign, and asks:
 
 ```text
 Domain        por.example.com
@@ -153,18 +176,33 @@ It checks each signature against its row's address and message, as the platform 
 
 ## Keys and options
 
+### Recovery phrase
+
+- A BIP-39 phrase of 12 to 24 English words. At the prompt, type it on one line. In a file, any spacing and case will do, on one line or several.
+- por-sign searches the first 100 addresses of the standard path `m/44'/60'/0'/0/{i}`, which MetaMask and most wallets use, and of Ledger Live's `m/44'/60'/{i}'/0/0`. It stops as soon as it has found the address of every row to sign.
+- `--paths <pattern>` searches other paths instead, with ranges; repeatable. Put the pattern in double quotes, so the shell leaves its `'` and `{…}` alone: `--paths "m/44'/60'/0'/0/{0..499}"`.
+- `--passphrase` is for a phrase with a BIP-39 passphrase, sometimes called the 25th word. It can only be typed at the prompt.
+
+### Keystore files
+
+- JSON keystore files (version 3, scrypt or PBKDF2), as Foundry (`cast wallet import`), geth, ethers and most wallets write them.
+- `--keystore <path>` names a file, or a folder of them, such as `~/.foundry/keystores`; repeatable. The folder's other files are ignored.
+- At the prompt, the password is asked once and tried on every file, and a file it doesn't open asks for its own. With `--password-file`, that one password is tried on every file, and a file it doesn't open is skipped.
+- A file that names its address is opened only if a row to sign has that address, as opening a keystore takes a moment.
+
+### Prompt or file
+
+- The hidden prompt shows nothing as you type, not even `*`. Press Enter when done, or Ctrl+C to stop. It works only in a terminal: in a script or a pipe, give the secrets in files.
+- Prefer the prompt: a secret saved in a file can survive in backups, or on the disk after you delete it. If you do use a file, delete it once you're done.
+- No option takes a secret itself, as the shell's history would keep it.
+
+### Other options
+
 | Option | What it does |
 | --- | --- |
-| `--mnemonic` | Type the recovery phrase, on one line, at a hidden prompt |
-| `--mnemonic-file <path>` | Read the recovery phrase from a file |
-| `--passphrase` | Type the recovery phrase's BIP-39 passphrase at a hidden prompt |
-| `--paths <pattern>` | The derivation paths to search, with ranges, such as `m/44'/60'/0'/0/{0..499}`; repeatable. Default: the first 100 of `m/44'/60'/0'/0/{i}` (MetaMask and most wallets) and of `m/44'/60'/{i}'/0/0` (Ledger Live) |
-| `--keystore <path>` | A keystore file, or a folder of them, scrypt or PBKDF2; repeatable |
-| `--password-file <path>` | Read the keystores' password from a file. Without it, por-sign asks once, and again for any file that password doesn't open |
 | `--out <path>` | Where to write the signed file. Default: `<file>-signed.csv`, next to the input |
-
-- Prefer the hidden prompt to a file: a recovery phrase or password saved in a file can survive in backups, or on the disk after you delete it. If you do use a file, delete it once you're done.
-- Put a `--paths` pattern in double quotes, so the shell leaves its `'` and `{…}` alone: `--paths "m/44'/60'/0'/0/{0..499}"`.
+| `-h`, `--help` | Show the options |
+| `--version` | Show the version |
 
 ## What it refuses or skips
 
@@ -199,6 +237,18 @@ These pages are in the platform's docs, under *For key holders*.
 | `1` | Nothing signed, or a check failed |
 | `2` | A mistake in the command |
 | `130` | Interrupted |
+
+## Standards
+
+| Group | Standard | For |
+| --- | --- | --- |
+| Signing | EIP-191 | Signing the message (`personal_sign`), and checking a signature |
+| Keys | BIP-39 | Recovery phrases, English word list |
+| | BIP-32, BIP-44 | Derivation paths |
+| | Web3 Secret Storage, version 3 | Keystore files, scrypt or PBKDF2 |
+| The file | RFC 4180 | The CSV file |
+
+How por-sign applies each, and where it stops: [docs/standards.md](docs/standards.md).
 
 ## Check a release against the source
 

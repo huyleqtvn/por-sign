@@ -18,9 +18,10 @@ A task is done when `pnpm build`, `pnpm lint` and `pnpm test` pass.
 
 - TypeScript ESM on Node 22. Imports name the `.ts` file, relatively.
 - A `.ts` file has at most 300 lines (ESLint `max-lines`). Split a longer one by what it does.
-- Each file in `src/` starts with a comment saying what it is for and why it works that way, citing README.md or this file by section, or the platform's client docs by page. Never the platform's source code or internal docs: this repository is public.
+- Each file in `src/` starts with a comment saying what it is for and why it works that way, citing README.md, this file or `docs/` by section, or the platform's client docs by page. Never the platform's source code or internal docs: this repository is public.
 - **No network code.** `test/offline.test.ts` lists every import `src/` may use, and every package the bundle may hold; a new one is added there on purpose, and never one that opens a connection.
 - **Secrets** (mnemonic, passphrase, password) are never arguments, never printed, never written, and never in an error message.
+- **`docs/standards.md`** says how por-sign applies each standard it relies on. Change it in the same commit as the code it describes.
 - **The message check** (`src/message.ts`) follows the platform's message line for line, as does `test/support.ts`. When the platform changes its message, change both and release.
 - Test keys are the public test mnemonic and the keystores in `test/fixtures/keystores/` (password `por-sign-test`), written by `cast` and ethers. Never a real key.
 
