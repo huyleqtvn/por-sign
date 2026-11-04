@@ -40,7 +40,7 @@ Key holders run por-sign on the machine that holds their keys, so the worst risk
 
 ## Releases
 
-A key holder runs a release on the machine that holds their keys, so anyone must be able to check it against the source ([README.md › Install](README.md#install)). Each release has:
+A key holder runs a release on the machine that holds their keys, so anyone must be able to check it against the source ([README.md › Check a release against the source](README.md#check-a-release-against-the-source)). Each release has:
 
 - **`por-sign.mjs`**, the bundle `pnpm build` writes. The same commit builds to the same bytes on any system. The lockfile fixes every package, `packageManager` fixes pnpm (the bundle names files by pnpm's folders), and `.gitattributes` keeps line endings LF on Windows. Keep the build free of anything that depends on the machine, the folder or the time.
 - **A program for each system**: the bundle, compiled with Bun at the version `release.yml` names.

@@ -1,97 +1,111 @@
 # por-sign
 
-For key holders: signs the PoR Reports Platform's **Export messages** file on your own machine, offline. It writes the file back with the `signature` column filled in, ready for your Client Admin to upload with **Import signatures**. One command signs every row whose key you give it, instead of one message at a time.
+Signs the PoR Reports Platform's **Export messages** file on the key holder's own machine, offline, and writes it back with the `signature` column filled in, ready for **Import signatures**. One command signs every row whose key you give it.
 
-- It signs only the platform's ownership message, for the platform you name with `--domain`. It refuses any other text.
-- It has no network code: it runs on an offline machine and never contacts the platform.
-- Your keys stay on your machine. You type your recovery phrase or password at a hidden prompt, or por-sign reads it from a file. It never takes them as command-line arguments, and never prints, saves or sends them.
+- **Only the platform's message**, for the domain you name with `--domain`. Any other text is refused.
+- **No network code.** It runs offline and never contacts the platform.
+- **Your keys stay with you.** You type them at a hidden prompt, or por-sign reads them from a file. They are never taken as arguments, and never printed, saved or sent.
 
-For now it signs EVM messages (EIP-191), with keys from a BIP-39 recovery phrase (mnemonic) or keystore files.
+For now it signs EVM messages (EIP-191), with keys from a BIP-39 recovery phrase or keystore files.
 
-**The steps are in the platform's docs**, on the page *Sign with por-sign*, at `https://<domain>/docs/key-holders/sign-with-por-sign`: where the file comes from, what to check before you sign, and how to send the file back. Ask your Client Admin for the platform's domain, and confirm it through a different channel from the one that brought the file. This page is the reference for the tool itself. Its examples use `por.example.com` for the domain, and `messages.csv` for the file, named `<project ID>-messages-<YYYY-MM-DD>.csv`.
+> **Key holders:** follow the steps in your platform's docs, on *Sign with por-sign* (`https://<domain>/docs/key-holders/sign-with-por-sign`). Ask your Client Admin for the domain, and confirm it through a different channel from the one that brought the file.
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Install](#install)
+  - [Check the download](#check-the-download)
+  - [Run it](#run-it)
+  - [With npm](#with-npm)
+  - [Build from source](#build-from-source)
+- [Sign](#sign)
+- [Check before you send it](#check-before-you-send-it)
+- [Keys and options](#keys-and-options)
+- [What it refuses or skips](#what-it-refuses-or-skips)
+- [Not supported](#not-supported)
+- [Exit codes](#exit-codes)
+- [Check a release against the source](#check-a-release-against-the-source)
+- [License](#license)
+
+## Quick start
+
+```bash
+por-sign sign messages.csv --domain por.example.com --mnemonic   # asks, then writes messages-signed.csv
+por-sign verify messages-signed.csv --domain por.example.com     # checks the signatures
+```
+
+Then send `messages-signed.csv` to your Client Admin. `messages.csv` is the file from Export messages, and `por.example.com` stands for the domain your Client Admin confirmed. With keystore files, use `--keystore <folder>` instead of `--mnemonic`.
 
 ## Install
 
-Releases are not published yet. Until they are, [build it from source](#build-from-source).
+> Releases are not published yet. Until they are, [build it from source](#build-from-source).
 
-Sign on a machine that is offline, if you can: download and check por-sign on a connected machine, then copy it and the file across.
+Download a file from the [Releases page](https://github.com/huyleqtvn/por-sign/releases) on a connected machine. If you can, sign on an offline machine: check the file, then copy it and the CSV file across.
 
-### Download a release
-
-Each release on the [Releases page](../../releases) has por-sign in two forms, and a `SHA256SUMS` file with the checksum of each file:
-
-- **`por-sign.mjs`**, for any system with Node.js 22 or later: one file of JavaScript, holding por-sign's code and that of the packages it uses. You can read it, and anyone can [build it again from the source](#check-it-against-the-source) to the same bytes.
-- **A program for each system**, which needs nothing else installed: the same file, compiled with Bun, which adds its own runtime. It can't be read as text, so its checksum and attestation are what check it.
-
-| System | Program |
+| File | For |
 | --- | --- |
-| macOS, Apple silicon | `por-sign-macos-arm64` |
-| macOS, Intel | `por-sign-macos-x64` |
-| Linux, x64 | `por-sign-linux-x64` |
-| Linux, ARM64 | `por-sign-linux-arm64` |
-| Windows, x64 | `por-sign-windows-x64.exe` |
+| `por-sign.mjs` | Any system with Node.js 22 or later: one file of JavaScript, which you can read |
+| `por-sign-macos-arm64` | macOS, Apple silicon |
+| `por-sign-macos-x64` | macOS, Intel |
+| `por-sign-linux-x64` | Linux, x64 |
+| `por-sign-linux-arm64` | Linux, ARM64 |
+| `por-sign-windows-x64.exe` | Windows, x64 |
 
-Check the file before you run it:
+The programs need nothing else installed. They are `por-sign.mjs` compiled with Bun, which adds its own runtime, so they can't be read as text.
+
+### Check the download
+
+Compare the file's checksum with its line in `SHA256SUMS`, then verify its attestation with the [GitHub CLI](https://cli.github.com). Use your file's name in place of `por-sign.mjs`:
 
 ```bash
-shasum -a 256 por-sign.mjs     # must match its line in SHA256SUMS
+shasum -a 256 por-sign.mjs     # Linux: sha256sum · Windows: Get-FileHash, in capitals
 gh attestation verify por-sign.mjs --repo huyleqtvn/por-sign
 ```
 
-The attestation proves that this repository's release workflow built the file, and names the commit it built it from, so nobody swapped in another file. On Windows, `Get-FileHash por-sign.mjs` in PowerShell prints the checksum.
+The attestation proves that this repository's release workflow built the file, and names the commit it built it from.
 
-With `por-sign.mjs`, type `node por-sign.mjs` wherever the examples below say `por-sign`.
+### Run it
 
-With a program, name it `por-sign` and make it runnable:
+With `por-sign.mjs`, type `node por-sign.mjs` where the examples say `por-sign`.
 
-```bash
-mv por-sign-macos-arm64 por-sign
-chmod +x por-sign
-xattr -d com.apple.quarantine por-sign   # macOS, if a browser downloaded it
-```
-
-macOS won't open a program downloaded with a browser unless Apple has checked it. The `xattr` command removes that block, so run it only after the checks above pass.
-
-The examples below run it as `por-sign`. Either move it to a folder on your `PATH`, or run it from its own folder as `./por-sign`.
-
-### Check it against the source
-
-To check that `por-sign.mjs` holds the release's source code and nothing else, build it again from the release's tag, with Node.js 22 and git:
+With a program, on macOS or Linux:
 
 ```bash
-git clone https://github.com/huyleqtvn/por-sign.git
-cd por-sign
-git checkout v0.1.0              # the release's version
-corepack enable                  # provides pnpm, at the version package.json names
-pnpm install --frozen-lockfile
-pnpm build
-shasum -a 256 dist/por-sign.mjs  # must match por-sign.mjs in SHA256SUMS
+mv por-sign-macos-arm64 por-sign && chmod +x por-sign
+xattr -d com.apple.quarantine por-sign   # macOS only, if a browser downloaded it
+./por-sign --version
 ```
 
-The same tag builds to the same bytes on any system. To read the file: each part starts with a comment naming the file it comes from, either por-sign's own, such as `// src/message.ts`, or one of viem and `@scure/bip39` and the `@noble` and `@scure` packages they use, under `// node_modules/`.
+On Windows, in PowerShell:
+
+```powershell
+Rename-Item por-sign-windows-x64.exe por-sign.exe
+Unblock-File por-sign.exe                # if a browser downloaded it
+.\por-sign --version
+```
+
+`xattr` and `Unblock-File` lift the block that macOS and Windows put on a downloaded program from an unknown publisher. Run them only after the checks pass.
 
 ### With npm
 
-With Node.js 22 or later:
-
 ```bash
-npm install --global por-sign
+npm install --global por-sign    # Node.js 22 or later
 ```
 
-The package holds the same `por-sign.mjs`, and no other package is installed with it. Its page on npmjs.com links it to the commit and the workflow that built it.
+It installs the same `por-sign.mjs` and no other package. Its page on npmjs.com links it to the commit and the workflow that built it.
 
 ### Build from source
 
-With Node.js 22, clone this repository, then in its folder:
+With git and Node.js 22, in a clone of this repository:
 
 ```bash
 corepack enable                  # provides pnpm, at the version package.json names
 pnpm install --frozen-lockfile
-pnpm build
-alias por-sign="node $PWD/dist/por-sign.mjs"
+pnpm build                       # writes dist/por-sign.mjs
+node dist/por-sign.mjs --version
 ```
 
-The alias lasts until you close the terminal. On Windows, type `node dist\por-sign.mjs` wherever the examples say `por-sign`. To sign on an offline machine, copy `dist/por-sign.mjs` across: with Node.js, it is all por-sign needs. To change the code, see [CONTRIBUTING.md](CONTRIBUTING.md).
+Type `node dist/por-sign.mjs` where the examples say `por-sign`. On an offline machine, that one file is all por-sign needs, besides Node.js. To change the code, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Sign
 
@@ -103,9 +117,11 @@ por-sign sign messages.csv --domain por.example.com --mnemonic
 por-sign sign messages.csv --domain por.example.com --keystore ~/.foundry/keystores
 ```
 
-`--domain` is the domain your Client Admin confirmed. Type it yourself; don't copy it from the file. A forged file names a lookalike domain, such as `por-example.com`, and this check is what catches it: every row whose message names another domain is refused.
+In PowerShell, the commands are the same, with Windows paths such as `$HOME\.foundry\keystores`.
 
-por-sign checks each row, shows what it will sign, and asks before signing anything:
+**Type `--domain` yourself; never copy it from the file.** A forged file names a lookalike domain, such as `por-example.com`, and por-sign refuses every row whose message names a domain other than yours.
+
+por-sign checks each row, shows what it will sign, and asks first:
 
 ```text
 Domain        por.example.com
@@ -121,9 +137,7 @@ Signed 4 of 5 rows. Wrote messages-signed.csv.
 Send it to your Client Admin, for Import signatures before Nov 10, 2026 · 08:27 UTC.
 ```
 
-Check the domain, organization and project before you answer `y`. **Accept until** is the earliest deadline among the rows to sign, in UTC.
-
-It writes `messages-signed.csv` next to the input, or to the path `--out` names. It never overwrites the input, nor a signed file already there.
+Check the domain, organization and project before you answer `y`. **Accept until** is the earliest deadline among the rows to sign, in UTC. The signed file goes next to the input, or to `--out`; por-sign never overwrites a file.
 
 ## Check before you send it
 
@@ -135,7 +149,7 @@ por-sign verify messages-signed.csv --domain por.example.com
 5 rows: 4 valid, 0 failed, 1 not signed.
 ```
 
-It checks each signature against its row's address and message, as the platform will, with no key. Exit code 0 means every signature is valid. Your Client Admin can run it too, before Import signatures.
+It checks each signature against its row's address and message, as the platform will, with no key. Exit code 0 means every signature is valid. Your Client Admin can run it too.
 
 ## Keys and options
 
@@ -143,21 +157,14 @@ It checks each signature against its row's address and message, as the platform 
 | --- | --- |
 | `--mnemonic` | Type the recovery phrase, on one line, at a hidden prompt |
 | `--mnemonic-file <path>` | Read the recovery phrase from a file |
-| `--passphrase` | The recovery phrase has a BIP-39 passphrase: type it at a hidden prompt |
-| `--paths <pattern>` | The derivation paths to search, with ranges, such as `m/44'/60'/0'/0/{0..499}`; repeatable. By default, the first 100 addresses of the standard path `m/44'/60'/0'/0/{i}`, which MetaMask and most wallets use, and of Ledger Live's `m/44'/60'/{i}'/0/0` |
-| `--keystore <path>` | A keystore file, or a folder of them; repeatable. Scrypt and PBKDF2 files are both read |
-| `--password-file <path>` | Read the keystores' password from a file. Without it, por-sign asks for the password once, and asks again for any file that password doesn't open |
-| `--out <path>` | Where to write the signed file. By default, `<file>-signed.csv` next to the input |
+| `--passphrase` | Type the recovery phrase's BIP-39 passphrase at a hidden prompt |
+| `--paths <pattern>` | The derivation paths to search, with ranges, such as `m/44'/60'/0'/0/{0..499}`; repeatable. Default: the first 100 of `m/44'/60'/0'/0/{i}` (MetaMask and most wallets) and of `m/44'/60'/{i}'/0/0` (Ledger Live) |
+| `--keystore <path>` | A keystore file, or a folder of them, scrypt or PBKDF2; repeatable |
+| `--password-file <path>` | Read the keystores' password from a file. Without it, por-sign asks once, and again for any file that password doesn't open |
+| `--out <path>` | Where to write the signed file. Default: `<file>-signed.csv`, next to the input |
 
-Prefer the hidden prompt to `--mnemonic-file` and `--password-file`: a recovery phrase or password saved in a file can survive in backups, or on the disk after you delete the file. If you do use a file, delete it once you're done.
-
-Put a `--paths` pattern in double quotes, so the shell leaves its `'` and `{…}` alone:
-
-```bash
-por-sign sign messages.csv --domain por.example.com --mnemonic --paths "m/44'/60'/0'/0/{0..499}"
-```
-
-On Windows, the commands are the same in PowerShell, with Windows paths such as `$HOME\.foundry\keystores`.
+- Prefer the hidden prompt to a file: a recovery phrase or password saved in a file can survive in backups, or on the disk after you delete it. If you do use a file, delete it once you're done.
+- Put a `--paths` pattern in double quotes, so the shell leaves its `'` and `{…}` alone: `--paths "m/44'/60'/0'/0/{0..499}"`.
 
 ## What it refuses or skips
 
@@ -177,14 +184,37 @@ On Windows, the commands are the same in PowerShell, with Windows paths such as 
 
 ## Not supported
 
-- **Hardware wallets** (Ledger, Trezor): por-sign can't sign with one yet. Never type a hardware wallet's recovery phrase into a computer: that removes the protection the device gives you. Sign each message on the device instead, as the platform's *Sign with your wallet* shows, at `https://<domain>/docs/key-holders/sign-with-your-wallet`.
+These pages are in the platform's docs, under *For key holders*.
+
+- **Hardware wallets** (Ledger, Trezor): not yet. Never type a hardware wallet's recovery phrase into a computer. Sign each message on the device instead, as *Sign with your wallet* shows.
 - **A plain private key:** make a keystore of it first, with `cast wallet import <name> --interactive`.
-- **Custody and MPC platforms** sign with their own message signing, as *Sign with your wallet* describes. **Safe and other contract wallets** are not in the file: they prove ownership with a designated transaction, as the platform's *Send a designated transaction* describes, at `https://<domain>/docs/key-holders/send-designated-transaction`.
+- **Custody and MPC platforms:** use their own message signing, as *Sign with your wallet* describes.
+- **Safe and other contract wallets** are not in the file. They prove ownership with a designated transaction: see *Send a designated transaction*.
 
 ## Exit codes
 
-`0` done; `1` nothing signed, or a check failed; `2` a mistake in the command; `130` interrupted.
+| Code | Meaning |
+| --- | --- |
+| `0` | Done |
+| `1` | Nothing signed, or a check failed |
+| `2` | A mistake in the command |
+| `130` | Interrupted |
+
+## Check a release against the source
+
+Build `por-sign.mjs` again from the release's tag. The same tag gives the same bytes on any system:
+
+```bash
+git clone https://github.com/huyleqtvn/por-sign.git && cd por-sign
+git checkout v0.1.0              # the release's version
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build
+shasum -a 256 dist/por-sign.mjs  # must match por-sign.mjs in SHA256SUMS
+```
+
+The programs are this file compiled with Bun, and the same release workflow attests them all. To read the file: each part starts with a comment naming the file it comes from, either por-sign's own (`// src/…`) or a package's (`// node_modules/…`).
 
 ## License
 
-MIT, in [LICENSE](LICENSE). `por-sign.mjs` and the programs also hold the code of viem, `@noble` and `@scure`, all under MIT; their licenses are at the end of `por-sign.mjs`.
+MIT, in [LICENSE](LICENSE). The code of viem, `@noble` and `@scure` that `por-sign.mjs` holds is under MIT too, and their licenses are at the end of the file.
