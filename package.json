@@ -1,0 +1,42 @@
+{
+  "name": "por-sign",
+  "version": "0.1.0",
+  "description": "Signs the PoR Reports Platform's Export messages file on the key holder's machine, offline",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huyleqtvn/por-sign.git"
+  },
+  "type": "module",
+  "bin": {
+    "por-sign": "dist/por-sign.mjs"
+  },
+  "files": [
+    "dist/por-sign.mjs"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && tsx build.ts",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/cli.ts"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "dependencies": {
+    "@scure/bip39": "1.6.0",
+    "viem": "2.57.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
+  }
+}

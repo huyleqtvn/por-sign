@@ -1,0 +1,25 @@
+# Supply-chain rules for installing packages (CONTRIBUTING.md › Dependencies).
+
+# `pnpm add` writes the exact version, so every version in package.json is chosen on purpose.
+savePrefix: ''
+
+# Only versions published at least 7 days ago, by which time most hijacked releases have been found and pulled.
+# An exception names one exact version and why, and goes once that version is 7 days old.
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude: []
+
+# Refuses a version published with less evidence of who built it (provenance, trusted publishing) than an
+# earlier version had, as a stolen publish token would produce.
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Required by @types/node 22 (~6.21.0). Published 2024-11-13 without provenance, after versions that had it.
+  - undici-types@6.21.0
+
+# Packages from the npm registry only: no git, tarball or URL dependencies, direct or transitive.
+blockExoticSubdeps: true
+
+# No install scripts run. An unlisted package with one fails the install until it is listed here.
+strictDepBuilds: true
+allowBuilds:
+  # Its script only checks its platform binary, which works without it.
+  esbuild: false

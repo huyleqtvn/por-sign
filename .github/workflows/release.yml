@@ -1,0 +1,132 @@
+# Releases the version a tag names, such as v0.1.0, once the tag is pushed (CONTRIBUTING.md › Releases).
+# `bundle` checks the commit and builds dist/por-sign.mjs. `programs`, on each system, builds the bundle again from
+# the sources, which must give the same bytes, compiles that bundle into the system's program, and runs the
+# command-line tests on both. `publish` puts them on the Releases page with SHA256SUMS and a build attestation for
+# each, then publishes the same bundle to npm, with provenance. Each action is pinned to a commit, and Bun to a
+# version, as packages are.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: The tag names package.json's version
+        run: test "$GITHUB_REF_NAME" = "v$(node -p 'require("./package.json").version')"
+      - run: pnpm audit --prod
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: por-sign.mjs
+          path: dist/por-sign.mjs
+          if-no-files-found: error
+
+  programs:
+    needs: bundle
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, target: bun-linux-x64-baseline, file: por-sign-linux-x64 }
+          - { runner: ubuntu-24.04-arm, target: bun-linux-arm64, file: por-sign-linux-arm64 }
+          - { runner: macos-15, target: bun-darwin-arm64, file: por-sign-macos-arm64 }
+          - { runner: macos-15-intel, target: bun-darwin-x64, file: por-sign-macos-x64 }
+          - { runner: windows-2025, target: bun-windows-x64-baseline, file: por-sign-windows-x64.exe }
+    runs-on: ${{ matrix.runner }}
+    env:
+      TARGET: ${{ matrix.target }}
+      FILE: ${{ matrix.file }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: por-sign.mjs
+          path: release
+      - name: The same bundle, built again on this system
+        run: pnpm build && cmp dist/por-sign.mjs release/por-sign.mjs
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      # The x64 programs are built for any x64 processor (baseline), as a key holder's offline machine may be old.
+      - run: bun build --compile --target="$TARGET" release/por-sign.mjs --outfile "release/$FILE"
+      - name: The command-line tests, on the bundle and the program
+        run: |
+          POR_SIGN=release/por-sign.mjs pnpm test test/cli.test.ts
+          POR_SIGN="release/$FILE" pnpm test test/cli.test.ts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.file }}
+          path: release/${{ matrix.file }}
+          if-no-files-found: error
+
+  publish:
+    needs: programs
+    runs-on: ubuntu-24.04
+    # Its protection rules, such as a required reviewer, hold the release until someone approves it.
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: release
+          merge-multiple: true
+      - name: SHA256SUMS
+        working-directory: release
+        run: sha256sum por-sign* > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/por-sign*
+      # A draft first, published once every file is on it: with immutable releases, a published release's files and
+      # tag can no longer change.
+      - name: The Releases page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+            --title "$GITHUB_REF_NAME" --notes "Check each file before you run it: README.md › Install."
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # npm's trusted publishing needs npm 11.5.1 or later, which Node 24 ships.
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # The package holds the same por-sign.mjs. As viem and @scure/bip39 are bundled in it, it lists no
+      # dependencies, so installing it fetches no other package.
+      - name: npm
+        run: |
+          mkdir -p dist
+          cp release/por-sign.mjs dist/
+          npm pkg delete dependencies
+          npm publish --provenance --access public
